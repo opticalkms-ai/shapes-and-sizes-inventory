@@ -496,6 +496,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       message: `Transaction ${transactionId} completed successfully.`,
       transactionId,
       totalAmount,
+      date: timestamp,
     };
   };
 

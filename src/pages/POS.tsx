@@ -19,11 +19,15 @@ export function POS() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "gcash">("cash");
   const [cashReceived, setCashReceived] = useState("");
+  const [gcashReference, setGcashReference] = useState("");
   const [processing, setProcessing] = useState(false);
   const [lastTransaction, setLastTransaction] = useState<{
     transactionId: string;
     totalAmount: number;
+    date: string;
+    paymentMethod: "cash" | "gcash";
   } | null>(null);
   const deferredSearch = useDeferredValue(search);
 
@@ -77,7 +81,22 @@ export function POS() {
   const subtotal = cartDetails.reduce((sum, item) => sum + item.lineTotal, 0);
   const cashValue = Number.parseFloat(cashReceived);
   const hasValidCash = !Number.isNaN(cashValue) && cashValue >= subtotal;
-  const change = hasValidCash ? cashValue - subtotal : 0;
+  const hasValidGcash = paymentMethod === "gcash" ? gcashReference.trim().length > 0 : true;
+  const change = paymentMethod === "cash" && hasValidCash ? cashValue - subtotal : 0;
+  const paymentValid = paymentMethod === "cash" ? hasValidCash : hasValidGcash;
+
+  const formatDate = (iso: string) => {
+    const date = new Date(iso);
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }) + " " + date.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  };
 
   const addToCart = (productId: string) => {
     const product = products.find(entry => entry.id === productId);
@@ -133,8 +152,12 @@ export function POS() {
       return;
     }
 
-    if (!hasValidCash) {
-      toast.error("Cash received must cover the full total.");
+    if (!paymentValid) {
+      if (paymentMethod === "cash") {
+        toast.error("Cash received must cover the full total.");
+      } else {
+        toast.error("Enter a valid GCash reference to complete payment.");
+      }
       return;
     }
 
@@ -157,9 +180,12 @@ export function POS() {
     setLastTransaction({
       transactionId: result.transactionId,
       totalAmount: result.totalAmount,
+      date: result.date ?? new Date().toISOString(),
+      paymentMethod,
     });
     setCart([]);
     setCashReceived("");
+    setGcashReference("");
     toast.success(`Checkout complete: ${result.transactionId}`);
   };
 
@@ -372,23 +398,64 @@ export function POS() {
                 </div>
               </div>
 
-              <div className="mt-4 space-y-2">
-                <label className="block text-sm font-semibold text-gray-800">Cash Received</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={cashReceived}
-                  onChange={event => setCashReceived(event.target.value)}
-                  placeholder="0.00"
-                  className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C2185B]"
-                />
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Change</span>
-                  <span className={`font-semibold ${hasValidCash ? "text-emerald-600" : "text-gray-400"}`}>
-                    {pesoFormatter.format(change)}
-                  </span>
+              <div className="mt-4 space-y-3">
+                <div className="grid gap-3 sm:grid-cols-[1fr_1fr]">
+                  <label className="flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      checked={paymentMethod === "cash"}
+                      onChange={() => setPaymentMethod("cash")}
+                      className="h-4 w-4 text-[#C2185B]"
+                    />
+                    Cash
+                  </label>
+                  <label className="flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      checked={paymentMethod === "gcash"}
+                      onChange={() => setPaymentMethod("gcash")}
+                      className="h-4 w-4 text-[#C2185B]"
+                    />
+                    GCash
+                  </label>
                 </div>
+
+                {paymentMethod === "cash" ? (
+                  <>
+                    <label className="block text-sm font-semibold text-gray-800">Cash Received</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={cashReceived}
+                      onChange={event => setCashReceived(event.target.value)}
+                      placeholder="0.00"
+                      className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C2185B]"
+                    />
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Change</span>
+                      <span className={`font-semibold ${hasValidCash ? "text-emerald-600" : "text-gray-400"}`}>
+                        {pesoFormatter.format(change)}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <label className="block text-sm font-semibold text-gray-800">GCash Reference</label>
+                    <input
+                      type="text"
+                      value={gcashReference}
+                      onChange={event => setGcashReference(event.target.value)}
+                      placeholder="Enter transaction reference"
+                      className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C2185B]"
+                    />
+                    <div className="rounded-2xl bg-emerald-50 p-3 text-sm text-emerald-900">
+                      Please collect payment through GCash and confirm the transaction reference before checkout.
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="mt-5 flex gap-3">
@@ -420,6 +487,12 @@ export function POS() {
               <div className="text-sm font-semibold text-emerald-900">{lastTransaction.transactionId}</div>
               <div className="mt-1 text-sm text-emerald-800">
                 Total: {pesoFormatter.format(lastTransaction.totalAmount)}
+              </div>
+              <div className="mt-1 text-sm text-gray-700">
+                Payment: {lastTransaction.paymentMethod === "cash" ? "Cash" : "GCash"}
+              </div>
+              <div className="mt-1 text-sm text-gray-700">
+                Purchased at: {formatDate(lastTransaction.date)}
               </div>
             </div>
           )}

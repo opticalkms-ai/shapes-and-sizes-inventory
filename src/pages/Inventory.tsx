@@ -14,6 +14,12 @@ interface ProductFormData {
 const emptyForm: ProductFormData = { name: "", sku: "", category: "", quantity: "", price: "" };
 
 const ITEMS_PER_PAGE = 10;
+const CATEGORY_OPTIONS = [
+  "Barong",
+  "Barong Accessories",
+  "General Accessories",
+  "Others",
+] as const;
 
 export function Inventory() {
   const { products, addProduct, updateProduct, deleteProduct } = useApp();
@@ -25,6 +31,7 @@ export function Inventory() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("name");
   const [currentPage, setCurrentPage] = useState(1);
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
 
   const openAdd = () => {
     setEditProduct(null);
@@ -37,7 +44,7 @@ export function Inventory() {
     setForm({
       name: product.name,
       sku: product.sku || "",
-      category: product.category || "",
+      category: product.category,
       quantity: String(product.quantity),
       price: String(product.price),
     });
@@ -52,11 +59,16 @@ export function Inventory() {
     if (isNaN(qty) || qty < 0) { toast.error("Invalid quantity"); return; }
     if (isNaN(price) || price < 0) { toast.error("Invalid price"); return; }
 
+    const categoryText = form.category.trim();
+    if (categoryText && !CATEGORY_OPTIONS.includes(categoryText as (typeof CATEGORY_OPTIONS)[number]) && !customCategories.includes(categoryText)) {
+      setCustomCategories(prev => [...prev, categoryText]);
+    }
+
     if (editProduct) {
-      updateProduct(editProduct.id, { name: form.name.trim(), sku: form.sku.trim(), category: form.category.trim(), quantity: qty, price });
+      updateProduct(editProduct.id, { name: form.name.trim(), sku: form.sku.trim(), category: categoryText, quantity: qty, price });
       toast.success(`"${form.name}" has been updated.`);
     } else {
-      addProduct({ name: form.name.trim(), sku: form.sku.trim(), category: form.category.trim(), quantity: qty, price });
+      addProduct({ name: form.name.trim(), sku: form.sku.trim(), category: categoryText, quantity: qty, price });
       toast.success(`"${form.name}" has been added to your inventory.`, { description: "Product Added" });
     }
     setShowModal(false);
@@ -70,9 +82,13 @@ export function Inventory() {
   };
 
   const categories = useMemo(() => {
-    const cats = new Set(products.map(p => p.category).filter(Boolean));
+    const cats = new Set([...
+      CATEGORY_OPTIONS,
+      ...customCategories,
+      ...products.map(p => p.category).filter(Boolean),
+    ]);
     return Array.from(cats).sort();
-  }, [products]);
+  }, [products, customCategories]);
 
   const filtered = useMemo(() => {
     let result = products.filter(p =>
@@ -303,11 +319,17 @@ export function Inventory() {
               <div>
                 <label className="block text-sm font-semibold text-gray-800 mb-1">Category</label>
                 <input
+                  list="inventory-categories"
                   value={form.category}
                   onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
-                  placeholder="Dresses"
-                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C2185B]"
+                  placeholder="Type or select category"
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C2185B] bg-white"
                 />
+                <datalist id="inventory-categories">
+                  {categories.map(category => (
+                    <option key={category} value={category} />
+                  ))}
+                </datalist>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-800 mb-1">Quantity</label>

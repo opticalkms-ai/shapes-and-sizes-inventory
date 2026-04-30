@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink, useNavigate } from "react-router";
-import { LayoutDashboard, Package, DollarSign, Users, Settings, LogOut, ShoppingCart, X } from "lucide-react";
+import { LayoutDashboard, Package, DollarSign, Users, Settings, LogOut, ShoppingCart, X, AlertTriangle } from "lucide-react";
 import { Logo } from "./Logo";
 import { useApp } from "../context/AppContext";
 import { canAccessSection } from "../utils/access";
@@ -8,8 +8,9 @@ import { canAccessSection } from "../utils/access";
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/inventory", icon: Package, label: "Inventory" },
+  { to: "/low-stock", icon: AlertTriangle, label: "Low Stock" },
   { to: "/pos", icon: ShoppingCart, label: "POS" },
-  { to: "/sales", icon: DollarSign, label: "Sales" },
+  { to: "/sales", icon: DollarSign, label: "Transaction History" },
   { to: "/users", icon: Users, label: "Users" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
@@ -34,6 +35,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     const section = item.to.replace("/", "") as
       | "dashboard"
       | "inventory"
+      | "low-stock"
       | "pos"
       | "sales"
       | "users"

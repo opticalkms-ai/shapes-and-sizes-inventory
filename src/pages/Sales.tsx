@@ -1,24 +1,21 @@
 import React, { useState, useMemo } from "react";
-import { Plus, Trash2, X, DollarSign, ShoppingCart, TrendingUp, Download, AlertCircle } from "lucide-react";
+import { Trash2, DollarSign, ShoppingCart, TrendingUp, Download, AlertCircle } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useApp } from "../context/AppContext";
 import { toast } from "sonner";
 import { Navigate } from "react-router";
 
 export function Sales() {
-  const { sales, products, recordSale, clearSales, currentUser } = useApp();
+  const { sales, clearSales, currentUser } = useApp();
 
   // Only Managers and Admins can access Sales
   if (currentUser?.role === "Employee") {
     return <Navigate to="/inventory" replace />;
   }
-  const [showModal, setShowModal] = useState(false);
-  const [selectedProductId, setSelectedProductId] = useState("");
-  const [quantity, setQuantity] = useState("1");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("all");
-
-  const availableProducts = products.filter(p => p.quantity > 0);
+  const [selectedDate, setSelectedDate] = useState("");
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -26,7 +23,15 @@ export function Sales() {
   const filteredSales = useMemo(() => {
     let result = [...sales];
 
-    if (dateFilter === "today") {
+    if (selectedDate) {
+      const selected = new Date(selectedDate);
+      selected.setHours(0, 0, 0, 0);
+      result = result.filter(s => {
+        const saleDate = new Date(s.date);
+        saleDate.setHours(0, 0, 0, 0);
+        return saleDate.getTime() === selected.getTime();
+      });
+    } else if (dateFilter === "today") {
       result = result.filter(s => {
         const saleDate = new Date(s.date);
         saleDate.setHours(0, 0, 0, 0);
@@ -47,7 +52,7 @@ export function Sales() {
     }
 
     return result;
-  }, [sales, dateFilter, searchTerm, today]);
+  }, [sales, dateFilter, selectedDate, searchTerm, today]);
 
   const salesToday = sales.filter(s => {
     const saleDate = new Date(s.date);
@@ -58,6 +63,18 @@ export function Sales() {
   const totalRevenue = sales.reduce((sum, s) => sum + s.totalAmount, 0);
   const totalItemsSold = sales.reduce((sum, s) => sum + s.quantity, 0);
   const salesTodayCount = salesToday.length;
+
+  const bestSellingProducts = useMemo(() => {
+    const counts = sales.reduce((acc, sale) => {
+      acc[sale.productName] = (acc[sale.productName] || 0) + sale.quantity;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return Object.entries(counts)
+      .map(([productName, quantity]) => ({ productName, quantity }))
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 6);
+  }, [sales]);
 
   const exportToCSV = () => {
     if (filteredSales.length === 0) {
@@ -88,44 +105,20 @@ export function Sales() {
     toast.success("Sales data exported successfully");
   };
 
-  const handleRecord = () => {
-    if (!selectedProductId) { toast.error("Please select a product"); return; }
-    const qty = parseInt(quantity);
-    if (isNaN(qty) || qty <= 0) { toast.error("Invalid quantity"); return; }
-    const result = recordSale(selectedProductId, qty);
-    if (result.success) {
-      toast.success(result.message, { description: "Sale Recorded" });
-      setShowModal(false);
-      setSelectedProductId("");
-      setQuantity("1");
-    } else {
-      toast.error(result.message);
-    }
-  };
-
   const formatDate = (iso: string) => {
     const d = new Date(iso);
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) +
       ", " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
   };
 
-  const selectedProduct = products.find(p => p.id === selectedProductId);
-
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Sales Transactions</h1>
-          <p className="text-sm text-gray-500">Record new sales and view transaction history.</p>
+          <h1 className="text-xl font-bold text-gray-900">Transaction History</h1>
+          <p className="text-sm text-gray-500">View purchase history, find purchases by date, and see top-selling products.</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-[#C2185B] hover:bg-[#9D1050] text-white rounded-md px-4 py-2 text-sm font-semibold transition-colors"
-        >
-          <Plus size={16} />
-          Record Sale
-        </button>
       </div>
 
       {/* Summary Cards */}
@@ -158,13 +151,40 @@ export function Sales() {
         </div>
       </div>
 
+      {/* Best Selling Products */}
+      <div className="bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.08)] border border-gray-200 p-4">
+        <div className="flex items-center justify-between gap-3 border-b border-gray-200 pb-3 mb-4">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">Best Selling Products</h2>
+            <p className="text-xs text-gray-400">Products with the most quantity sold.</p>
+          </div>
+        </div>
+        {bestSellingProducts.length === 0 ? (
+          <div className="py-12 text-center text-sm text-gray-500">
+            No transactions yet to generate a product ranking.
+          </div>
+        ) : (
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={bestSellingProducts} margin={{ top: 10, right: 20, left: 0, bottom: 40 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                <XAxis dataKey="productName" tick={{ fontSize: 12 }} interval={0} angle={-30} textAnchor="end" height={70} />
+                <YAxis />
+                <Tooltip formatter={(value: number) => [`${value}`, "Units"]} />
+                <Bar dataKey="quantity" fill="#C2185B" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
       {/* Sales History */}
       <div className="bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.08)] border border-gray-200">
         <div className="p-4 border-b border-gray-200">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-gray-900">Sales History</h2>
-              <p className="text-xs text-gray-400">A list of all sales transactions</p>
+              <h2 className="text-sm font-semibold text-gray-900">Transaction History</h2>
+              <p className="text-xs text-gray-400">A list of all completed purchases</p>
             </div>
             {sales.length > 0 && (
               <div className="flex flex-wrap gap-2">
@@ -185,6 +205,19 @@ export function Sales() {
                   <option value="week">Last 7 Days</option>
                   <option value="month">Last 30 Days</option>
                 </select>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={e => setSelectedDate(e.target.value)}
+                  className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C2185B]"
+                  aria-label="Find by purchase date"
+                />
+                <button
+                  onClick={() => setSelectedDate("")}
+                  className="border border-gray-300 hover:bg-gray-50 text-gray-700 rounded px-3 py-1.5 text-sm transition-colors"
+                >
+                  Clear Date
+                </button>
                 <button
                   onClick={exportToCSV}
                   className="flex items-center gap-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded px-3 py-1.5 text-sm transition-colors"
@@ -207,14 +240,7 @@ export function Sales() {
         {sales.length === 0 ? (
           <div className="py-20 flex flex-col items-center text-center">
             <DollarSign size={48} className="text-gray-300 mb-3" />
-            <p className="text-sm text-gray-500 mb-4">No sales have been recorded yet</p>
-            <button
-              onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 bg-[#C2185B] hover:bg-[#9D1050] text-white rounded-md px-4 py-2 text-sm font-semibold transition-colors"
-            >
-              <Plus size={16} />
-              Record First Sale
-            </button>
+            <p className="text-sm text-gray-500">No transactions have been recorded yet</p>
           </div>
         ) : filteredSales.length === 0 ? (
           <div className="py-12 text-center">
@@ -260,74 +286,6 @@ export function Sales() {
           </div>
         )}
       </div>
-
-      {/* Record Sale Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-base font-bold text-gray-900">Record a New Sale</h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
-                <X size={18} />
-              </button>
-            </div>
-            <p className="text-sm text-gray-500 mb-5">
-              Select a product and enter the quantity sold. The stock level will be automatically updated.
-            </p>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-800 mb-1">Product</label>
-                {availableProducts.length === 0 ? (
-                  <p className="text-sm text-gray-400 border border-gray-200 rounded-lg px-3 py-2">No products with stock available.</p>
-                ) : (
-                  <select
-                    value={selectedProductId}
-                    onChange={e => { setSelectedProductId(e.target.value); setQuantity("1"); }}
-                    className="w-full border border-gray-300 rounded px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C2185B] bg-white"
-                  >
-                    <option value="">Select a product...</option>
-                    {availableProducts.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} ({p.quantity} in stock)
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-800 mb-1">Quantity Sold</label>
-                <input
-                  type="number"
-                  min="1"
-                  max={selectedProduct?.quantity}
-                  value={quantity}
-                  onChange={e => setQuantity(e.target.value)}
-                  className="w-full border border-gray-300 rounded px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C2185B]"
-                />
-                {selectedProduct && (
-                  <p className="text-xs text-gray-400 mt-1">
-                    Max: {selectedProduct.quantity} — Est. Total: ₱{(selectedProduct.price * (parseInt(quantity) || 0)).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-                Cancel
-              </button>
-              <button
-                onClick={handleRecord}
-                className="px-5 py-2 text-sm bg-[#C2185B] hover:bg-[#9D1050] text-white rounded-md font-semibold transition-colors"
-              >
-                Record Sale
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Clear Confirm */}
       {showClearConfirm && (

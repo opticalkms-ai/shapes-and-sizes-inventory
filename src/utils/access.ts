@@ -3,14 +3,15 @@ import type { UserRole } from "../context/AppContext";
 export type AppSection =
   | "dashboard"
   | "inventory"
+  | "low-stock"
   | "pos"
   | "sales"
   | "users"
   | "settings";
 
 const ROLE_ACCESS: Record<UserRole, AppSection[]> = {
-  Admin: ["dashboard", "inventory", "pos", "sales", "users", "settings"],
-  Manager: ["inventory", "sales"],
+  Admin: ["dashboard", "inventory", "low-stock", "pos", "sales", "users", "settings"],
+  Manager: ["inventory", "low-stock", "sales"],
   Employee: ["pos"],
 };
 
@@ -31,6 +32,7 @@ export function getSectionFromPath(pathname: string): AppSection | null {
   switch (firstSegment) {
     case "dashboard":
     case "inventory":
+    case "low-stock":
     case "pos":
     case "sales":
     case "users":

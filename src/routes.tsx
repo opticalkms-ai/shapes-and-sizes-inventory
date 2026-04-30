@@ -8,6 +8,7 @@ import { ForgotPassword } from "./pages/ForgotPassword";
 import { ResetPassword } from "./pages/ResetPassword";
 import { Dashboard } from "./pages/Dashboard";
 import { Inventory } from "./pages/Inventory";
+import { LowStock } from "./pages/LowStock";
 import { POS } from "./pages/POS";
 import { Sales } from "./pages/Sales";
 import { Users } from "./pages/Users";
@@ -41,6 +42,7 @@ export const router = createBrowserRouter([
       { index: true, element: <HomeRedirect /> },
       { path: "dashboard", element: <Dashboard /> },
       { path: "inventory", element: <Inventory /> },
+      { path: "low-stock", element: <LowStock /> },
       { path: "pos", element: <POS /> },
       { path: "sales", element: <Sales /> },
       { path: "users", element: <Users /> },
