@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Pencil, Trash2, X, Users as UsersIcon, Eye, EyeOff } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Users as UsersIcon, Eye, EyeOff, Building2 } from "lucide-react";
 import { useApp, User, UserRole } from "../context/AppContext";
 import { toast } from "sonner";
 
@@ -16,14 +16,15 @@ interface UserFormData {
   email: string;
   password: string;
   role: UserRole;
+  branchId: string;
 }
 
 const emptyForm: UserFormData = {
-  firstName: "", lastName: "", middleName: "", email: "", password: "", role: "Employee",
+  firstName: "", lastName: "", middleName: "", email: "", password: "", role: "Employee", branchId: "",
 };
 
 export function Users() {
-  const { users, currentUser, addUser, updateUser, deleteUser } = useApp();
+  const { users, branches, currentUser, addUser, updateUser, deleteUser } = useApp();
   const [showModal, setShowModal] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
   const [form, setForm] = useState<UserFormData>(emptyForm);
@@ -50,7 +51,7 @@ export function Users() {
 
   const openAdd = () => {
     setEditUser(null);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, branchId: branches[0]?.id || "" });
     setShowPass(false);
     setShowModal(true);
   };
@@ -64,6 +65,7 @@ export function Users() {
       email: user.email,
       password: user.password,
       role: user.role,
+      branchId: user.branchId || "",
     });
     setShowPass(false);
     setShowModal(true);
@@ -82,6 +84,7 @@ export function Users() {
         email: form.email.trim(),
         password: form.password || editUser.password,
         role: form.role,
+        branchId: form.branchId || editUser.branchId,
       });
       toast.success(`${form.firstName} ${form.lastName} has been updated.`);
     } else {
@@ -95,6 +98,7 @@ export function Users() {
         email: form.email.trim(),
         password: form.password,
         role: form.role,
+        branchId: form.branchId || branches[0]?.id,
       });
       toast.success(`${form.firstName} ${form.lastName} has been added.`);
     }
@@ -109,6 +113,11 @@ export function Users() {
   };
 
   const formatDate = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+  const getBranchName = (branchId?: string) => {
+    if (!branchId) return "-";
+    return branches.find(b => b.id === branchId)?.name || "-";
+  };
 
   return (
     <div>
@@ -142,6 +151,7 @@ export function Users() {
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-700 uppercase tracking-wide">Name</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-700 uppercase tracking-wide">Email</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-700 uppercase tracking-wide">Role</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-700 uppercase tracking-wide">Branch</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-700 uppercase tracking-wide">Joined</th>
                   {isAdmin && <th className="text-right px-4 py-3 text-xs font-semibold text-gray-700 uppercase tracking-wide">Actions</th>}
                 </tr>
@@ -172,6 +182,12 @@ export function Users() {
                       <span className={`text-xs px-2.5 py-1 rounded font-medium ${ROLE_COLORS[user.role]}`}>
                         {user.role}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 text-sm">
+                      <div className="flex items-center gap-1">
+                        <Building2 size={14} className="text-gray-400" />
+                        {getBranchName(user.branchId)}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(user.createdAt)}</td>
                     {isAdmin && (
@@ -249,6 +265,17 @@ export function Users() {
                   <option value="Employee">Employee</option>
                   <option value="Manager">Manager</option>
                   <option value="Admin">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-800 mb-1">Branch</label>
+                <select value={form.branchId} onChange={e => setForm(p => ({ ...p, branchId: e.target.value }))}
+                  className="w-full border border-gray-300 rounded px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C2185B] bg-white">
+                  {branches.map(branch => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>

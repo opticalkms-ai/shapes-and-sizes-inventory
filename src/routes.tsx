@@ -13,6 +13,7 @@ import { POS } from "./pages/POS";
 import { Sales } from "./pages/Sales";
 import { Users } from "./pages/Users";
 import { Settings } from "./pages/Settings";
+import { Branches } from "./pages/Branches";
 
 export const router = createBrowserRouter([
   {
@@ -45,6 +46,7 @@ export const router = createBrowserRouter([
       { path: "low-stock", element: <LowStock /> },
       { path: "pos", element: <POS /> },
       { path: "sales", element: <Sales /> },
+      { path: "branches", element: <Branches /> },
       { path: "users", element: <Users /> },
       { path: "settings", element: <Settings /> },
     ],

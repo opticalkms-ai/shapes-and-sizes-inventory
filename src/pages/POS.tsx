@@ -1,5 +1,5 @@
 import React, { useDeferredValue, useMemo, useState } from "react";
-import { Minus, Package, Plus, Receipt, Search, ShoppingCart, Trash2 } from "lucide-react";
+import { Minus, Package, Plus, Receipt, Search, ShoppingCart, Trash2, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 
@@ -15,7 +15,7 @@ const pesoFormatter = new Intl.NumberFormat("en-PH", {
 });
 
 export function POS() {
-  const { products, checkoutSale, currentUser } = useApp();
+  const { products, branches, checkoutSale, currentUser } = useApp();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -23,6 +23,7 @@ export function POS() {
   const [cashReceived, setCashReceived] = useState("");
   const [gcashReference, setGcashReference] = useState("");
   const [processing, setProcessing] = useState(false);
+  const [selectedBranch, setSelectedBranch] = useState<string>(currentUser?.branchId || branches[0]?.id || "");
   const [lastTransaction, setLastTransaction] = useState<{
     transactionId: string;
     totalAmount: number;
@@ -168,6 +169,7 @@ export function POS() {
         productId: item.productId,
         quantity: item.quantity,
       })),
+      selectedBranch,
     );
 
     setProcessing(false);
@@ -198,10 +200,26 @@ export function POS() {
             Process walk-in purchases and update stock in real time.
           </p>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
-          <div className="text-xs uppercase tracking-wide text-gray-400">Cashier</div>
-          <div className="font-semibold text-gray-900">
-            {currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Not signed in"}
+        <div className="flex gap-4 flex-wrap">
+          <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+            <div className="text-xs uppercase tracking-wide text-gray-400 mb-1">Branch</div>
+            <select
+              value={selectedBranch}
+              onChange={(e) => setSelectedBranch(e.target.value)}
+              className="font-semibold text-gray-900 border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-[#C2185B]"
+            >
+              {branches.map(branch => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+            <div className="text-xs uppercase tracking-wide text-gray-400">Cashier</div>
+            <div className="font-semibold text-gray-900">
+              {currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Not signed in"}
+            </div>
           </div>
         </div>
       </div>

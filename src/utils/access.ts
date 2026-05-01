@@ -6,11 +6,12 @@ export type AppSection =
   | "low-stock"
   | "pos"
   | "sales"
+  | "branches"
   | "users"
   | "settings";
 
 const ROLE_ACCESS: Record<UserRole, AppSection[]> = {
-  Admin: ["dashboard", "inventory", "low-stock", "pos", "sales", "users", "settings"],
+  Admin: ["dashboard", "inventory", "low-stock", "pos", "sales", "branches", "users", "settings"],
   Manager: ["inventory", "low-stock", "sales"],
   Employee: ["pos"],
 };
@@ -35,6 +36,7 @@ export function getSectionFromPath(pathname: string): AppSection | null {
     case "low-stock":
     case "pos":
     case "sales":
+    case "branches":
     case "users":
     case "settings":
       return firstSegment;

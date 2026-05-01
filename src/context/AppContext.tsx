@@ -3,6 +3,14 @@ import { api } from "../utils/api";
 
 export type UserRole = "Admin" | "Manager" | "Employee";
 
+export interface Branch {
+  id: string;
+  name: string;
+  location: string;
+  manager?: string;
+  createdAt: string;
+}
+
 export interface User {
   id: string;
   firstName: string;
@@ -11,6 +19,7 @@ export interface User {
   email: string;
   password: string;
   role: UserRole;
+  branchId?: string;
   createdAt: string;
 }
 
@@ -34,6 +43,7 @@ export interface Sale {
   totalAmount: number;
   date: string;
   cashierName?: string;
+  branchId?: string;
 }
 
 interface AppContextType {
@@ -41,6 +51,7 @@ interface AppContextType {
   users: User[];
   products: Product[];
   sales: Sale[];
+  branches: Branch[];
   pendingUser: Omit<User, "id" | "createdAt"> | null;
   generatedOtp: string | null;
   login: (email: string, password: string) => { success: boolean; message: string };
@@ -52,8 +63,8 @@ interface AppContextType {
   addProduct: (product: Omit<Product, "id" | "addedDate">) => void;
   updateProduct: (id: string, updates: Partial<Product>) => void;
   deleteProduct: (id: string) => void;
-  recordSale: (productId: string, quantity: number) => { success: boolean; message: string };
-  checkoutSale: (items: Array<{ productId: string; quantity: number }>) => {
+  recordSale: (productId: string, quantity: number, branchId?: string) => { success: boolean; message: string };
+  checkoutSale: (items: Array<{ productId: string; quantity: number }>, branchId?: string) => {
     success: boolean;
     message: string;
     transactionId?: string;
@@ -63,6 +74,10 @@ interface AppContextType {
   addUser: (user: Omit<User, "id" | "createdAt">) => void;
   updateUser: (id: string, updates: Partial<User>) => void;
   deleteUser: (id: string) => void;
+  addBranch: (branch: Omit<Branch, "id" | "createdAt">) => void;
+  updateBranch: (id: string, updates: Partial<Branch>) => void;
+  deleteBranch: (id: string) => void;
+  getSalesByBranch: (branchId: string) => Sale[];
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -71,6 +86,7 @@ const STORAGE_KEYS = {
   users: "sns_users",
   products: "sns_products",
   sales: "sns_sales",
+  branches: "sns_branches",
   currentUser: "sns_current_user",
 };
 
@@ -82,6 +98,15 @@ const defaultAdmin: User = {
   email: "admin@shapesandsizes.com",
   password: "admin123",
   role: "Admin",
+  branchId: "1",
+  createdAt: new Date().toISOString(),
+};
+
+const defaultBranch: Branch = {
+  id: "1",
+  name: "Main Branch",
+  location: "Headquarters",
+  manager: "Jerome Aceebuche",
   createdAt: new Date().toISOString(),
 };
 
@@ -102,6 +127,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return stored ? JSON.parse(stored) : [];
   });
 
+  const [branches, setBranches] = useState<Branch[]>(() => {
+    const stored = localStorage.getItem(STORAGE_KEYS.branches);
+    if (stored) return JSON.parse(stored);
+    return [defaultBranch];
+  });
+
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const stored = localStorage.getItem(STORAGE_KEYS.currentUser);
     return stored ? JSON.parse(stored) : null;
@@ -112,6 +143,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [usersLoaded, setUsersLoaded] = useState(false);
   const [inventoryLoaded, setInventoryLoaded] = useState(false);
   const [salesLoaded, setSalesLoaded] = useState(false);
+  const [branchesLoaded, setBranchesLoaded] = useState(false);
 
   const syncUsersToServer = async (nextUsers: User[]) => {
     try {
@@ -146,9 +178,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const syncBranchesToServer = async (nextBranches: Branch[]) => {
+    try {
+      const result = await api.saveBranches?.(nextBranches);
+      if (result && !result.success) {
+        console.error("Failed to save branches:", result.message);
+      }
+    } catch (error) {
+      console.error("Error saving branches:", error);
+    }
+  };
+
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.users, JSON.stringify(users)); }, [users]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.products, JSON.stringify(products)); }, [products]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.sales, JSON.stringify(sales)); }, [sales]);
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.branches, JSON.stringify(branches)); }, [branches]);
   useEffect(() => {
     if (currentUser) localStorage.setItem(STORAGE_KEYS.currentUser, JSON.stringify(currentUser));
     else localStorage.removeItem(STORAGE_KEYS.currentUser);
@@ -268,6 +312,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
 
     void loadSales();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBranches = async () => {
+      try {
+        const result = await api.getBranches?.();
+
+        if (cancelled) return;
+
+        if (result && result.success && Array.isArray(result.branches)) {
+          if (result.branches.length > 0) {
+            setBranches(result.branches);
+          } else if (branches.length > 0) {
+            await syncBranchesToServer(branches);
+          }
+        } else {
+          if (branches.length === 0) {
+            setBranches([defaultBranch]);
+          }
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Error loading branches:", error);
+        }
+      } finally {
+        if (!cancelled) {
+          setBranchesLoaded(true);
+        }
+      }
+    };
+
+    void loadBranches();
 
     return () => {
       cancelled = true;
@@ -415,7 +497,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const checkoutSale = (items: Array<{ productId: string; quantity: number }>) => {
+  const checkoutSale = (items: Array<{ productId: string; quantity: number }>, branchId?: string) => {
     if (!currentUser) {
       return { success: false, message: "You must be logged in to complete a sale." };
     }
@@ -453,6 +535,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const transactionId = `TXN-${Date.now()}`;
     const timestamp = new Date().toISOString();
     const cashierName = `${currentUser.firstName} ${currentUser.lastName}`;
+    const finalBranchId = branchId || currentUser.branchId || branches[0]?.id;
 
     const updatedProducts = products.map(product => {
       const transactionItem = transactionItems.find(item => item.productId === product.id);
@@ -475,6 +558,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         totalAmount: product.price * item.quantity,
         date: timestamp,
         cashierName,
+        branchId: finalBranchId,
       };
     });
 
@@ -500,8 +584,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   };
 
-  const recordSale = (productId: string, quantity: number) => {
-    const result = checkoutSale([{ productId, quantity }]);
+  const recordSale = (productId: string, quantity: number, branchId?: string) => {
+    const result = checkoutSale([{ productId, quantity }], branchId);
     if (!result.success) {
       return { success: false, message: result.message };
     }
@@ -552,13 +636,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const addBranch = (branch: Omit<Branch, "id" | "createdAt">) => {
+    const newBranch: Branch = {
+      ...branch,
+      id: Date.now().toString(),
+      createdAt: new Date().toISOString(),
+    };
+    setBranches(prev => {
+      const nextBranches = [...prev, newBranch];
+      if (branchesLoaded) {
+        void syncBranchesToServer(nextBranches);
+      }
+      return nextBranches;
+    });
+  };
+
+  const updateBranch = (id: string, updates: Partial<Branch>) => {
+    setBranches(prev => {
+      const nextBranches = prev.map(b => b.id === id ? { ...b, ...updates } : b);
+      if (branchesLoaded) {
+        void syncBranchesToServer(nextBranches);
+      }
+      return nextBranches;
+    });
+  };
+
+  const deleteBranch = (id: string) => {
+    setBranches(prev => {
+      const nextBranches = prev.filter(b => b.id !== id);
+      if (branchesLoaded) {
+        void syncBranchesToServer(nextBranches);
+      }
+      return nextBranches;
+    });
+  };
+
+  const getSalesByBranch = (branchId: string) => {
+    return sales.filter(s => s.branchId === branchId);
+  };
+
   return (
     <AppContext.Provider value={{
-      currentUser, users, products, sales, pendingUser, generatedOtp,
+      currentUser, users, products, sales, branches, pendingUser, generatedOtp,
       login, logout, registerUser, verifyOtp, sendPasswordResetOtp, resetPassword,
       addProduct, updateProduct, deleteProduct, recordSale, clearSales,
       checkoutSale,
       addUser, updateUser, deleteUser,
+      addBranch, updateBranch, deleteBranch, getSalesByBranch,
     }}>
       {children}
     </AppContext.Provider>

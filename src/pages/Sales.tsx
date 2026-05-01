@@ -1,12 +1,12 @@
 import React, { useState, useMemo } from "react";
 import { Trash2, DollarSign, ShoppingCart, TrendingUp, Download, AlertCircle } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { useApp } from "../context/AppContext";
 import { toast } from "sonner";
 import { Navigate } from "react-router";
 
 export function Sales() {
-  const { sales, clearSales, currentUser } = useApp();
+  const { sales, branches, clearSales, currentUser } = useApp();
 
   // Only Managers and Admins can access Sales
   if (currentUser?.role === "Employee") {
@@ -16,12 +16,18 @@ export function Sales() {
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("all");
   const [selectedDate, setSelectedDate] = useState("");
+  const [selectedBranch, setSelectedBranch] = useState<string>("all");
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const filteredSales = useMemo(() => {
     let result = [...sales];
+
+    // Branch filter
+    if (selectedBranch !== "all") {
+      result = result.filter(s => s.branchId === selectedBranch);
+    }
 
     if (selectedDate) {
       const selected = new Date(selectedDate);
@@ -52,7 +58,7 @@ export function Sales() {
     }
 
     return result;
-  }, [sales, dateFilter, selectedDate, searchTerm, today]);
+  }, [sales, dateFilter, selectedDate, searchTerm, today, selectedBranch]);
 
   const salesToday = sales.filter(s => {
     const saleDate = new Date(s.date);
@@ -65,7 +71,7 @@ export function Sales() {
   const salesTodayCount = salesToday.length;
 
   const bestSellingProducts = useMemo(() => {
-    const counts = sales.reduce((acc, sale) => {
+    const counts = filteredSales.reduce((acc, sale) => {
       acc[sale.productName] = (acc[sale.productName] || 0) + sale.quantity;
       return acc;
     }, {} as Record<string, number>);
@@ -74,7 +80,23 @@ export function Sales() {
       .map(([productName, quantity]) => ({ productName, quantity }))
       .sort((a, b) => b.quantity - a.quantity)
       .slice(0, 6);
-  }, [sales]);
+  }, [filteredSales]);
+
+  const salesByBranch = useMemo(() => {
+    const branchSales: Record<string, number> = {};
+    
+    sales.forEach(sale => {
+      const branchId = sale.branchId || "Unassigned";
+      const branchName = branches.find(b => b.id === branchId)?.name || "Unassigned";
+      branchSales[branchName] = (branchSales[branchName] || 0) + sale.totalAmount;
+    });
+
+    return Object.entries(branchSales)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [sales, branches]);
+
+  const COLORS = ["#C2185B", "#D81B60", "#E1BEE7", "#AD1457", "#880E4F", "#F50057", "#FF4081"];
 
   const exportToCSV = () => {
     if (filteredSales.length === 0) {
@@ -82,16 +104,20 @@ export function Sales() {
       return;
     }
 
-    const headers = ["Product", "Quantity", "Price/Unit", "Total Amount", "Date"];
+    const headers = ["Product", "Quantity", "Price/Unit", "Total Amount", "Branch", "Date"];
     const csvRows = [
       headers.join(","),
-      ...filteredSales.map(s => [
-        `"${s.productName}"`,
-        s.quantity,
-        s.pricePerUnit,
-        s.totalAmount,
-        `"${formatDate(s.date)}"`
-      ].join(","))
+      ...filteredSales.map(s => {
+        const branchName = branches.find(b => b.id === s.branchId)?.name || "Unassigned";
+        return [
+          `"${s.productName}"`,
+          s.quantity,
+          s.pricePerUnit,
+          s.totalAmount,
+          `"${branchName}"`,
+          `"${formatDate(s.date)}"`
+        ].join(",");
+      })
     ];
 
     const csvContent = csvRows.join("\n");
@@ -117,7 +143,7 @@ export function Sales() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Transaction History</h1>
-          <p className="text-sm text-gray-500">View purchase history, find purchases by date, and see top-selling products.</p>
+          <p className="text-sm text-gray-500">View purchase history, find purchases by date and branch, and see top-selling products.</p>
         </div>
       </div>
 
@@ -150,6 +176,42 @@ export function Sales() {
           <div className="text-xs text-gray-400">Total units</div>
         </div>
       </div>
+
+      {/* Sales by Branch Chart */}
+      {salesByBranch.length > 0 && (
+        <div className="bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.08)] border border-gray-200 p-4">
+          <div className="flex items-center justify-between gap-3 border-b border-gray-200 pb-3 mb-4">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">Sales by Branch</h2>
+              <p className="text-xs text-gray-400">Revenue breakdown across branches</p>
+            </div>
+          </div>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={salesByBranch}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, value }) => `${name}: ₱${(value / 1000).toFixed(0)}K`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {salesByBranch.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value: number) => `₱${value.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
+                />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Best Selling Products */}
       <div className="bg-white rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.08)] border border-gray-200 p-4">
@@ -195,6 +257,18 @@ export function Sales() {
                   onChange={e => setSearchTerm(e.target.value)}
                   className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C2185B]"
                 />
+                <select
+                  value={selectedBranch}
+                  onChange={e => setSelectedBranch(e.target.value)}
+                  className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#C2185B]"
+                >
+                  <option value="all">All Branches</option>
+                  {branches.map(branch => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
                 <select
                   value={dateFilter}
                   onChange={e => setDateFilter(e.target.value as any)}
@@ -255,23 +329,28 @@ export function Sales() {
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-700 uppercase tracking-wide">Quantity</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-700 uppercase tracking-wide">Price/Unit</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-700 uppercase tracking-wide">Total Amount</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-700 uppercase tracking-wide">Branch</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-700 uppercase tracking-wide">Date</th>
                 </tr>
               </thead>
               <tbody>
-                {[...filteredSales].reverse().map(sale => (
-                  <tr key={sale.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 text-gray-900">{sale.productName}</td>
-                    <td className="px-4 py-3 text-right text-gray-700">{sale.quantity}</td>
-                    <td className="px-4 py-3 text-right text-gray-700">
-                      ₱{sale.pricePerUnit.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-[#C2185B]">
-                      ₱{sale.totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(sale.date)}</td>
-                  </tr>
-                ))}
+                {[...filteredSales].reverse().map(sale => {
+                  const branchName = branches.find(b => b.id === sale.branchId)?.name || "Unassigned";
+                  return (
+                    <tr key={sale.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3 text-gray-900">{sale.productName}</td>
+                      <td className="px-4 py-3 text-right text-gray-700">{sale.quantity}</td>
+                      <td className="px-4 py-3 text-right text-gray-700">
+                        ₱{sale.pricePerUnit.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-[#C2185B]">
+                        ₱{sale.totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700 text-xs">{branchName}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(sale.date)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-gray-200">
@@ -279,6 +358,7 @@ export function Sales() {
                   <td className="px-4 py-3 text-right font-bold text-[#C2185B]">
                     ₱{filteredSales.reduce((sum, s) => sum + s.totalAmount, 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
                   </td>
+                  <td></td>
                   <td></td>
                 </tr>
               </tfoot>

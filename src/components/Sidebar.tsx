@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink, useNavigate } from "react-router";
-import { LayoutDashboard, Package, DollarSign, Users, Settings, LogOut, ShoppingCart, X, AlertTriangle } from "lucide-react";
+import { LayoutDashboard, Package, DollarSign, Users, Settings, LogOut, ShoppingCart, X, AlertTriangle, Building2 } from "lucide-react";
 import { Logo } from "./Logo";
 import { useApp } from "../context/AppContext";
 import { canAccessSection } from "../utils/access";
@@ -11,6 +11,7 @@ const navItems = [
   { to: "/low-stock", icon: AlertTriangle, label: "Low Stock" },
   { to: "/pos", icon: ShoppingCart, label: "POS" },
   { to: "/sales", icon: DollarSign, label: "Transaction History" },
+  { to: "/branches", icon: Building2, label: "Branches" },
   { to: "/users", icon: Users, label: "Users" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
@@ -38,6 +39,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       | "low-stock"
       | "pos"
       | "sales"
+      | "branches"
       | "users"
       | "settings";
     return canAccessSection(currentUser?.role, section);
