@@ -14,40 +14,71 @@ interface ProductFormData {
 const emptyForm: ProductFormData = { name: "", sku: "", category: "", quantity: "", price: "" };
 
 const ITEMS_PER_PAGE = 10;
+const CUSTOM_CATEGORY_STORAGE_KEY = "sns_custom_categories";
 const CATEGORY_OPTIONS = [
   "Barong",
-  "Barong Accessories",
-  "General Accessories",
+  "Filipiniana Dress",
+  "Top",
+  "Bottom",
+  "Accessories",
+  "Footwear",
+  "Costume",
+  "Head Wear",
+  "Fabrics",
   "Others",
 ] as const;
+const DEFAULT_CATEGORIES = CATEGORY_OPTIONS.filter((category) => category !== "Others");
 
 export function Inventory() {
   const { products, addProduct, updateProduct, deleteProduct } = useApp();
   const [showModal, setShowModal] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [form, setForm] = useState<ProductFormData>(emptyForm);
+  const [newCustomCategory, setNewCustomCategory] = useState("");
+  const [customCategories, setCustomCategories] = useState<string[]>(() => {
+    const stored = localStorage.getItem(CUSTOM_CATEGORY_STORAGE_KEY);
+    if (!stored) return [];
+
+    try {
+      const parsed = JSON.parse(stored);
+      return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : [];
+    } catch {
+      return [];
+    }
+  });
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("name");
   const [currentPage, setCurrentPage] = useState(1);
-  const [customCategories, setCustomCategories] = useState<string[]>([]);
+
+  const availableCustomCategories = useMemo(() => {
+    const productCustomCategories = products
+      .map((product) => product.category)
+      .filter((category) => category && !CATEGORY_OPTIONS.includes(category as (typeof CATEGORY_OPTIONS)[number]));
+
+    return Array.from(new Set([...customCategories, ...productCustomCategories])).sort((a, b) => a.localeCompare(b));
+  }, [customCategories, products]);
 
   const openAdd = () => {
     setEditProduct(null);
     setForm(emptyForm);
+    setNewCustomCategory("");
     setShowModal(true);
   };
 
   const openEdit = (product: Product) => {
+    const isDefaultCategory = CATEGORY_OPTIONS.includes(product.category as (typeof CATEGORY_OPTIONS)[number]) && product.category !== "Others";
+
     setEditProduct(product);
     setForm({
       name: product.name,
       sku: product.sku || "",
-      category: product.category,
+      category: isDefaultCategory ? product.category : "Others",
       quantity: String(product.quantity),
       price: String(product.price),
     });
+    setNewCustomCategory(isDefaultCategory ? "" : product.category);
     setShowModal(true);
   };
 
@@ -59,9 +90,29 @@ export function Inventory() {
     if (isNaN(qty) || qty < 0) { toast.error("Invalid quantity"); return; }
     if (isNaN(price) || price < 0) { toast.error("Invalid price"); return; }
 
-    const categoryText = form.category.trim();
-    if (categoryText && !CATEGORY_OPTIONS.includes(categoryText as (typeof CATEGORY_OPTIONS)[number]) && !customCategories.includes(categoryText)) {
-      setCustomCategories(prev => [...prev, categoryText]);
+    const typedCustomCategory = newCustomCategory.trim();
+    const matchedDefaultCategory = DEFAULT_CATEGORIES.find(
+      (category) => category.toLowerCase() === typedCustomCategory.toLowerCase(),
+    );
+    const matchedSavedCustomCategory = availableCustomCategories.find(
+      (category) => category.toLowerCase() === typedCustomCategory.toLowerCase(),
+    );
+    const categoryText = form.category === "Others"
+      ? matchedDefaultCategory ?? matchedSavedCustomCategory ?? typedCustomCategory
+      : form.category.trim();
+    if (!categoryText) { toast.error("Category is required"); return; }
+
+    const isDefaultCategory = DEFAULT_CATEGORIES.includes(categoryText as (typeof DEFAULT_CATEGORIES)[number]);
+    const isCustomCategory = availableCustomCategories.includes(categoryText);
+    if (form.category !== "Others" && !isDefaultCategory) {
+      toast.error("Please select a valid category from the list.");
+      return;
+    }
+
+    if (form.category === "Others" && !isDefaultCategory && !isCustomCategory) {
+      const nextCategories = [...customCategories, categoryText].sort((a, b) => a.localeCompare(b));
+      setCustomCategories(nextCategories);
+      localStorage.setItem(CUSTOM_CATEGORY_STORAGE_KEY, JSON.stringify(nextCategories));
     }
 
     if (editProduct) {
@@ -82,13 +133,13 @@ export function Inventory() {
   };
 
   const categories = useMemo(() => {
-    const cats = new Set([...
-      CATEGORY_OPTIONS,
-      ...customCategories,
+    const cats = new Set([
+      ...DEFAULT_CATEGORIES,
+      ...availableCustomCategories,
       ...products.map(p => p.category).filter(Boolean),
     ]);
     return Array.from(cats).sort();
-  }, [products, customCategories]);
+  }, [availableCustomCategories, products]);
 
   const filtered = useMemo(() => {
     let result = products.filter(p =>
@@ -318,19 +369,44 @@ export function Inventory() {
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-800 mb-1">Category</label>
-                <input
-                  list="inventory-categories"
+                <select
                   value={form.category}
-                  onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
-                  placeholder="Type or select category"
+                  onChange={e => {
+                    const nextCategory = e.target.value;
+                    setForm(p => ({ ...p, category: nextCategory }));
+
+                    if (nextCategory !== "Others") {
+                      setNewCustomCategory("");
+                    }
+                  }}
                   className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C2185B] bg-white"
-                />
-                <datalist id="inventory-categories">
-                  {categories.map(category => (
-                    <option key={category} value={category} />
+                >
+                  <option value="">Select category</option>
+                  {CATEGORY_OPTIONS.map(category => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
                   ))}
-                </datalist>
+                </select>
               </div>
+              {form.category === "Others" && (
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-800 mb-1">New Category</label>
+                    <input
+                      value={newCustomCategory}
+                      onChange={e => setNewCustomCategory(e.target.value)}
+                      placeholder="Enter category name"
+                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C2185B]"
+                    />
+                    {availableCustomCategories.length > 0 && (
+                      <p className="mt-2 text-xs text-gray-500">
+                        Existing custom categories: {availableCustomCategories.join(", ")}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-semibold text-gray-800 mb-1">Quantity</label>
                 <input

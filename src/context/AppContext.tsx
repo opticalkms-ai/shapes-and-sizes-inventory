@@ -535,7 +535,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const transactionId = `TXN-${Date.now()}`;
     const timestamp = new Date().toISOString();
     const cashierName = `${currentUser.firstName} ${currentUser.lastName}`;
-    const finalBranchId = branchId || currentUser.branchId || branches[0]?.id;
+    const finalBranchId = currentUser.role === "Admin"
+      ? (branchId || currentUser.branchId || branches[0]?.id)
+      : (currentUser.branchId || branches[0]?.id);
 
     const updatedProducts = products.map(product => {
       const transactionItem = transactionItems.find(item => item.productId === product.id);

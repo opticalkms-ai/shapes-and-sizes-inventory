@@ -16,6 +16,7 @@ const pesoFormatter = new Intl.NumberFormat("en-PH", {
 
 export function POS() {
   const { products, branches, checkoutSale, currentUser } = useApp();
+  const isAdmin = currentUser?.role === "Admin";
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -85,6 +86,9 @@ export function POS() {
   const hasValidGcash = paymentMethod === "gcash" ? gcashReference.trim().length > 0 : true;
   const change = paymentMethod === "cash" && hasValidCash ? cashValue - subtotal : 0;
   const paymentValid = paymentMethod === "cash" ? hasValidCash : hasValidGcash;
+  const assignedBranchId = currentUser?.branchId || "";
+  const effectiveBranchId = isAdmin ? selectedBranch : assignedBranchId;
+  const effectiveBranchName = branches.find(branch => branch.id === effectiveBranchId)?.name || "Unassigned";
 
   const formatDate = (iso: string) => {
     const date = new Date(iso);
@@ -162,6 +166,11 @@ export function POS() {
       return;
     }
 
+    if (!effectiveBranchId) {
+      toast.error("No branch assigned. Please ask an admin to assign your branch.");
+      return;
+    }
+
     setProcessing(true);
 
     const result = checkoutSale(
@@ -169,7 +178,7 @@ export function POS() {
         productId: item.productId,
         quantity: item.quantity,
       })),
-      selectedBranch,
+      effectiveBranchId,
     );
 
     setProcessing(false);
@@ -203,17 +212,24 @@ export function POS() {
         <div className="flex gap-4 flex-wrap">
           <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
             <div className="text-xs uppercase tracking-wide text-gray-400 mb-1">Branch</div>
-            <select
-              value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
-              className="font-semibold text-gray-900 border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-[#C2185B]"
-            >
-              {branches.map(branch => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
+            {isAdmin ? (
+              <select
+                value={selectedBranch}
+                onChange={(e) => setSelectedBranch(e.target.value)}
+                className="font-semibold text-gray-900 border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-[#C2185B]"
+              >
+                {branches.map(branch => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="font-semibold text-gray-900 inline-flex items-center gap-1.5">
+                <Building2 size={14} className="text-gray-500" />
+                {effectiveBranchName}
+              </div>
+            )}
           </div>
           <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
             <div className="text-xs uppercase tracking-wide text-gray-400">Cashier</div>
